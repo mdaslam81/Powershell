@@ -1,0 +1,29 @@
+# Parameters
+$driveLetter = "D:"
+$thresholdGB = 300
+$sqlInstance = "localhost"   # Use instance name if not default
+
+# Check drive space
+$drive = Get-WmiObject -Class Win32_LogicalDisk -Filter "DeviceID='$driveLetter'"
+
+if ($null -ne $drive) {
+    $freeGB = [math]::Round($drive.FreeSpace / 1GB, 2)
+
+    if ($freeGB -lt $thresholdGB) {
+        # Prepare T-SQL email alert
+        $sql = @"
+EXEC msdb.dbo.sp_send_dbmail
+    @profile_name = 'YourMailProfile',
+    @recipients = 'your@email.com',
+    @subject = 'ALERT: Low Disk Space on $driveLetter',
+    @body = 'Drive $driveLetter has only $freeGB GB free. Threshold is $thresholdGB GB.';
+"@
+
+        # Send email using sp_send_dbmail
+        Invoke-Sqlcmd -ServerInstance $sqlInstance -Query $sql
+    } else {
+        Write-Output "OK: Drive $driveLetter has $freeGB GB free"
+    }
+} else {
+    Write-Output "ERROR: Drive $driveLetter not found"
+}
